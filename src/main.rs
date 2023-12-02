@@ -1,34 +1,21 @@
-use actix_web::{get, post, web, App, HttpResponse, HttpServer, Responder};
+use actix_web::{web, App, HttpRequest, HttpResponse, HttpServer, Responder};
 
-struct AppState {
-    app_name: String,
+async fn greet(req: HttpRequest) -> impl Responder {
+    let name = req.match_info().get("name").unwrap_or("World");
+    format!("Hello {}!", name)
 }
 
-#[get("/")]
-async fn hello(data: web::Data<AppState>) -> impl Responder {
-    let app_name = &data.app_name;
-    HttpResponse::Ok().body(format!("Hello world from {app_name}!"))
+async fn health_check(_req: HttpRequest) -> impl Responder {
+    HttpResponse::Ok().body(String::from("Server API working."))
 }
 
-#[post("/echo")]
-async fn echo(req_body: String) -> impl Responder {
-    HttpResponse::Ok().body(req_body)
-}
-
-async fn manual_hello() -> impl Responder {
-    HttpResponse::Ok().body("Hey there!")
-}
-
-#[actix_web::main]
-async fn main() -> std::io::Result<()> {
+#[tokio::main]
+async fn main() -> Result<(), std::io::Error> {
     HttpServer::new(|| {
         App::new()
-            .app_data(web::Data::new(AppState {
-                app_name: String::from("Actix"),
-            }))
-            .service(hello)
-            .service(echo)
-            .route("/hey", web::get().to(manual_hello))
+            .route("/", web::get().to(greet))
+            .route("/health_check", web::get().to(health_check))
+            .route("/{name}", web::get().to(greet))
     })
     .bind(("127.0.0.1", 8080))?
     .run()
