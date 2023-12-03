@@ -1,10 +1,26 @@
 use std::net::TcpListener;
 
-use actix_web::{dev::Server, web, App, HttpRequest, HttpResponse, HttpServer, Responder};
+use actix_web::{
+    dev::Server,
+    web::{self, Form},
+    App, HttpRequest, HttpResponse, HttpServer, Responder,
+};
+
+use serde::Deserialize;
 
 async fn greet(req: HttpRequest) -> impl Responder {
     let name = req.match_info().get("name").unwrap_or("World");
     format!("Hello {}!", name)
+}
+
+#[derive(Deserialize)]
+struct FormDataSubscriber {
+    email: String,
+    name: String,
+}
+
+async fn handle_subscription(_req: HttpRequest, _form: Form<FormDataSubscriber>) -> impl Responder {
+    HttpResponse::Ok().finish()
 }
 
 async fn health_check(_req: HttpRequest) -> impl Responder {
@@ -16,6 +32,7 @@ pub fn run(listener: TcpListener) -> Result<Server, std::io::Error> {
         App::new()
             .route("/", web::get().to(greet))
             .route("/health_check", web::get().to(health_check))
+            .route("/subscription", web::post().to(handle_subscription))
             .route("/{name}", web::get().to(greet))
     })
     .listen(listener)?
