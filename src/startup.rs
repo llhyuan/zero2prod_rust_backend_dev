@@ -1,39 +1,27 @@
+use crate::routes::subscription::subsribe;
 use std::net::TcpListener;
 
-use actix_web::{
-    dev::Server,
-    web::{self, Form},
-    App, HttpRequest, HttpResponse, HttpServer, Responder,
-};
-
-use serde::Deserialize;
+use actix_web::{dev::Server, web, App, HttpRequest, HttpResponse, HttpServer, Responder};
+use sqlx::PgPool;
 
 async fn greet(req: HttpRequest) -> impl Responder {
     let name = req.match_info().get("name").unwrap_or("World");
     format!("Hello {}!", name)
 }
 
-#[derive(Deserialize)]
-struct FormDataSubscriber {
-    email: String,
-    name: String,
-}
-
-async fn handle_subscription(_req: HttpRequest, _form: Form<FormDataSubscriber>) -> impl Responder {
-    HttpResponse::Ok().finish()
-}
-
 async fn health_check(_req: HttpRequest) -> impl Responder {
     HttpResponse::Ok().finish()
 }
 
-pub fn run(listener: TcpListener) -> Result<Server, std::io::Error> {
-    let server = HttpServer::new(|| {
+pub fn run(listener: TcpListener, db_pool: PgPool) -> Result<Server, std::io::Error> {
+    let connection_pool = web::Data::new(db_pool);
+    let server = HttpServer::new(move || {
         App::new()
             .route("/", web::get().to(greet))
             .route("/health_check", web::get().to(health_check))
-            .route("/subscriptions", web::post().to(handle_subscription))
+            .route("/subscriptions", web::post().to(subsribe))
             .route("/{name}", web::get().to(greet))
+            .app_data(connection_pool.clone())
     })
     .listen(listener)?
     .run();
