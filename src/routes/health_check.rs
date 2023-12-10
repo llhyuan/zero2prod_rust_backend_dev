@@ -47,19 +47,24 @@ pub async fn spawn_app() -> TestApp {
 }
 
 async fn configure_database(config: &DatabaseSettings) -> PgPool {
+    // First, connect to the admin database - postgres
     let mut connection = PgConnection::connect(&config.connection_string_without_db())
         .await
         .expect("Fail to connect to test database.");
 
+    // Then, use the established connection to create a new database for testing.
+    // Here, the query result is disgarded.
     connection
         .execute(format!(r#"CREATE DATABASE "{}";"#, config.database_name).as_str())
         .await
         .expect("Failed to create test database.");
 
+    // Then, establish a connection pool to the newly created test database.
     let connection_pool = PgPool::connect(&config.connection_string())
         .await
         .expect("Failed to connect to test database.");
 
+    // Run database migration operations to populate the database with test data.
     sqlx::migrate!("./migrations")
         .run(&connection_pool)
         .await
