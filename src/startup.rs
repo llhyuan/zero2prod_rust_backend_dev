@@ -8,6 +8,8 @@ use sqlx::PgPool;
 pub fn run(listener: TcpListener, db_pool: PgPool) -> Result<Server, std::io::Error> {
     let connection_pool = web::Data::new(db_pool);
     let server = HttpServer::new(move || {
+        // Pattern matching against the path happens in the order
+        // in which the routes are registered in the app.
         App::new()
             .wrap(Logger::default())
             .route("/", web::get().to(greet))
