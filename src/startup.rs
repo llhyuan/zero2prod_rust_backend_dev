@@ -1,9 +1,9 @@
 use crate::routes::subscription::subsribe;
 use std::net::TcpListener;
 
-use actix_web::middleware::Logger;
 use actix_web::{dev::Server, web, App, HttpRequest, HttpResponse, HttpServer, Responder};
 use sqlx::PgPool;
+use tracing_actix_web::TracingLogger;
 
 pub fn run(listener: TcpListener, db_pool: PgPool) -> Result<Server, std::io::Error> {
     let connection_pool = web::Data::new(db_pool);
@@ -11,7 +11,9 @@ pub fn run(listener: TcpListener, db_pool: PgPool) -> Result<Server, std::io::Er
         // Pattern matching against the path happens in the order
         // in which the routes are registered in the app.
         App::new()
-            .wrap(Logger::default())
+            // The default tracing logger will automaticaly
+            // create an id for each request on request start.
+            .wrap(TracingLogger::default())
             .route("/", web::get().to(greet))
             .route("/health_check", web::get().to(health_check))
             .route("/subscriptions", web::post().to(subsribe))
