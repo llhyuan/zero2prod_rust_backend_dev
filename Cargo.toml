@@ -42,3 +42,7 @@ features = [
 
 [dev-dependencies]
 reqwest = '0.11'
+
+[alias]
+docker-build = 'docker build -tag zero2prod -file Dockerfile .'
+docker-run = 'docker run -p 8000:8000 zero2prod | bunyan'
