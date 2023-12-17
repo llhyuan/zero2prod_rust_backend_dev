@@ -4,8 +4,8 @@ use crate::startup::run;
 use crate::telemetry::get_subscriber;
 use crate::telemetry::init_subscriber;
 use once_cell::sync::Lazy;
-use secrecy::ExposeSecret;
-use sqlx::{Connection, Executor, PgConnection, PgPool};
+use sqlx::ConnectOptions;
+use sqlx::{Executor, PgPool};
 use std::net::TcpListener;
 use uuid::Uuid;
 
@@ -68,10 +68,11 @@ pub async fn spawn_app() -> TestApp {
 
 pub async fn configure_database(config: &DatabaseSettings) -> PgPool {
     // First, connect to the admin database - postgres
-    let mut connection =
-        PgConnection::connect(config.connection_string_without_db().expose_secret())
-            .await
-            .expect("Fail to connect to test database.");
+    let mut connection = config
+        .without_db()
+        .connect()
+        .await
+        .expect("Fail to connect to test database.");
 
     // Then, use the established connection to create a new database for testing.
     // Here, the query result is disgarded.
@@ -81,7 +82,7 @@ pub async fn configure_database(config: &DatabaseSettings) -> PgPool {
         .expect("Failed to create test database.");
 
     // Then, establish a connection pool to the newly created test database.
-    let connection_pool = PgPool::connect(config.connection_string().expose_secret())
+    let connection_pool = PgPool::connect_with(config.with_db())
         .await
         .expect("Failed to connect to test database.");
 

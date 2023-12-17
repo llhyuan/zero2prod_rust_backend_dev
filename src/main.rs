@@ -1,7 +1,6 @@
 use std::net::TcpListener;
 
-use secrecy::ExposeSecret;
-use sqlx::PgPool;
+use sqlx::postgres::PgPoolOptions;
 use zero2prod::{
     configuration::get_configuration,
     startup::run,
@@ -16,9 +15,7 @@ async fn main() -> Result<(), std::io::Error> {
 
     let configurations = get_configuration().expect("Failed to read configuration.");
 
-    let connection =
-        PgPool::connect_lazy(configurations.database.connection_string().expose_secret())
-            .expect("Failed to connect to Postgres.");
+    let connection = PgPoolOptions::new().connect_lazy_with(configurations.database.with_db());
 
     let addr_to_bind = format!(
         "{}:{}",
