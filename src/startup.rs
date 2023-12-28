@@ -11,6 +11,9 @@ pub fn run(listener: TcpListener, db_pool: PgPool) -> Result<Server, std::io::Er
         // Pattern matching against the path happens in the order
         // in which the routes are registered in the app.
         App::new()
+            // Tracing on the server level
+            // The trace logger is monitoring incoming requests,
+            // creating a seperate logging span for each request.
             // The default tracing logger will automaticaly
             // create an id for each request on request start.
             .wrap(TracingLogger::default())
