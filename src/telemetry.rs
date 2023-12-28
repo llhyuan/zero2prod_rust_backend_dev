@@ -13,6 +13,8 @@ where
     Sink: for<'a> MakeWriter<'a> + Send + Sync + 'static,
 {
     let env_filter =
+        // use the environment variable RUST_LOG first,
+        // falls back on env_filter passed in.
         EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(env_filter));
     let formatting_layer = BunyanFormattingLayer::new(name, sink);
 
@@ -23,7 +25,8 @@ where
 }
 
 pub fn init_subscriber(subscriber: impl Subscriber + Send + Sync) {
-    // Redirect all log's events to tacing subsctiber.
+    // Converting all log's events into tracing events,
+    // and redirect them to subscriber.
     // init() can only be called once.
     LogTracer::init().expect("Failed to set logger");
 
