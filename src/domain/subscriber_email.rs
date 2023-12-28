@@ -22,14 +22,29 @@ impl AsRef<str> for SubscriberEmail {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use claims::{assert_err, assert_ok};
+    use claims::assert_err;
     use fake::faker::internet::en::SafeEmail;
     use fake::Fake;
+    use quickcheck::{Arbitrary, Gen};
+    use quickcheck_macros::quickcheck;
 
-    #[test]
-    fn valid_email_are_parsed_successfully() {
-        let email = SafeEmail().fake();
-        assert_ok!(SubscriberEmail::parse(email));
+    // define a type for quickcheck to generate arbitrary data on.
+    #[derive(Debug, Clone)]
+    struct ValidEmailFixture(pub String);
+
+    // Arbitrary trait has to be implemented
+    // to provide a way to for fake data generation.
+    impl Arbitrary for ValidEmailFixture {
+        fn arbitrary(_g: &mut Gen) -> Self {
+            let email = SafeEmail().fake();
+            Self(email)
+        }
+    }
+
+    #[quickcheck]
+    fn valid_emails_are_parsed_successfully(valid_email: ValidEmailFixture) -> bool {
+        dbg!(&valid_email.0);
+        SubscriberEmail::parse(valid_email.0).is_ok()
     }
 
     #[test]
