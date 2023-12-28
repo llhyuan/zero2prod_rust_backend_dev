@@ -10,6 +10,7 @@ use zero2prod::{
 #[tokio::main]
 async fn main() -> Result<(), std::io::Error> {
     // Initialize the logger
+    // On the application level
     let subscriber = get_subscriber("zero2prod".into(), "info".into(), std::io::stdout);
     init_subscriber(subscriber);
 
