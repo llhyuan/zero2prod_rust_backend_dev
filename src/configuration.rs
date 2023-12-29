@@ -6,6 +6,8 @@ use sqlx::{
     ConnectOptions,
 };
 
+use crate::domain::SubscriberEmail;
+
 pub enum Environment {
     Local,
     Production,
@@ -39,6 +41,7 @@ impl TryFrom<String> for Environment {
 pub struct Settings {
     pub database: DatabaseSettings,
     pub application: ApplicationSettings,
+    pub email_client: EmailClientSettings,
 }
 
 #[derive(Debug, Deserialize)]
@@ -82,6 +85,19 @@ impl DatabaseSettings {
             .port(self.port)
             .database("postgres")
             .ssl_mode(ssl_mode)
+    }
+}
+
+#[derive(Debug, serde::Deserialize)]
+pub struct EmailClientSettings {
+    pub base_url: String,
+    pub sender_email: String,
+    pub auth_token: Secret<String>,
+}
+
+impl EmailClientSettings {
+    pub fn sender(&self) -> Result<SubscriberEmail, String> {
+        SubscriberEmail::parse(self.sender_email.clone())
     }
 }
 
