@@ -2,3 +2,6 @@ application:
   host: "0.0.0.0"
 database:
   require_ssl: true
+email_client:
+  base_url: "url/to/email/service/sending/api"
+  sender_email: "prod_email@address.com"
