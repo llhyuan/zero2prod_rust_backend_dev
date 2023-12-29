@@ -4,6 +4,7 @@ use std::net::TcpListener;
 use uuid::Uuid;
 use zero2prod::configuration::get_configuration;
 use zero2prod::configuration::DatabaseSettings;
+use zero2prod::email_clients::EmailClient;
 use zero2prod::startup::run;
 use zero2prod::telemetry::get_subscriber;
 use zero2prod::telemetry::init_subscriber;
@@ -35,13 +36,25 @@ pub async fn spawn_app() -> TestApp {
     let listener = TcpListener::bind("127.0.0.1:0").expect("Failed to bind random port.");
     let addr = listener.local_addr().unwrap();
 
-    let mut configuration = get_configuration().expect("Failed to read configuration");
+    let mut configurations = get_configuration().expect("Failed to read configuration");
 
-    configuration.database.database_name = Uuid::new_v4().to_string();
+    configurations.database.database_name = Uuid::new_v4().to_string();
 
-    let connection_pool = configure_database(&configuration.database).await;
+    let connection_pool = configure_database(&configurations.database).await;
 
-    let server = run(listener, connection_pool.clone()).expect("Failed to fireup server for test.");
+    let sender_email = configurations
+        .email_client
+        .sender()
+        .expect("Invalide sender email.");
+
+    let email_client = EmailClient::new(
+        configurations.email_client.base_url,
+        sender_email,
+        configurations.email_client.auth_token,
+    );
+
+    let server = run(listener, connection_pool.clone(), email_client)
+        .expect("Failed to fireup server for test.");
 
     tokio::spawn(server);
     TestApp {
