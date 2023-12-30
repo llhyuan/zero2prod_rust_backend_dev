@@ -47,10 +47,12 @@ pub async fn spawn_app() -> TestApp {
         .sender()
         .expect("Invalide sender email.");
 
+    let timeout = configurations.email_client.timeout();
     let email_client = EmailClient::new(
         configurations.email_client.base_url,
         sender_email,
         configurations.email_client.auth_token,
+        timeout,
     );
 
     let server = run(listener, connection_pool.clone(), email_client)
