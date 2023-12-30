@@ -31,12 +31,13 @@ async fn main() -> Result<(), std::io::Error> {
         .sender()
         .expect("Invalide sender email.");
 
-    let auth_token = configurations.email_client.auth_token;
+    let timeout = configurations.email_client.timeout();
 
     let email_client = EmailClient::new(
         configurations.email_client.base_url,
         sender_email,
-        auth_token,
+        configurations.email_client.auth_token,
+        timeout,
     );
 
     run(listener, connection, email_client)?.await
