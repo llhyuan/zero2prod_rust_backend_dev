@@ -2,6 +2,7 @@ use once_cell::sync::Lazy;
 use reqwest::Response;
 use sqlx::{ConnectOptions, Executor, PgPool};
 use uuid::Uuid;
+use wiremock::MockServer;
 use zero2prod::configuration::get_configuration;
 use zero2prod::configuration::DatabaseSettings;
 use zero2prod::startup::Application;
@@ -11,6 +12,7 @@ use zero2prod::telemetry::init_subscriber;
 pub struct TestApp {
     pub address: String,
     pub connection_pool: PgPool,
+    pub email_server: MockServer,
 }
 
 impl TestApp {
@@ -50,6 +52,9 @@ pub async fn spawn_app() -> TestApp {
     configurations.application.host = String::from("127.0.0.1");
     configurations.application.port = 0;
 
+    let email_server = MockServer::start().await;
+    configurations.email_client.base_url = email_server.uri();
+
     let connection_pool = configure_database(&configurations.database).await;
 
     let application = Application::build(configurations)
@@ -61,6 +66,7 @@ pub async fn spawn_app() -> TestApp {
     TestApp {
         address: format!("http://{}", addr),
         connection_pool,
+        email_server,
     }
 }
 
