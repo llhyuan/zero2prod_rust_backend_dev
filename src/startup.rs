@@ -1,8 +1,12 @@
-use crate::{email_clients::EmailClient, routes::subscription::subsribe};
+use crate::{
+    configuration::{DatabaseSettings, Settings},
+    email_clients::EmailClient,
+    routes::subscription::subsribe,
+};
 use std::net::TcpListener;
 
 use actix_web::{dev::Server, web, App, HttpRequest, HttpResponse, HttpServer, Responder};
-use sqlx::PgPool;
+use sqlx::{postgres::PgPoolOptions, PgPool};
 use tracing_actix_web::TracingLogger;
 
 pub fn run(
@@ -39,6 +43,10 @@ pub fn run(
     Ok(server)
 }
 
+pub fn get_connection_pool(configuration: &DatabaseSettings) -> PgPool {
+    PgPoolOptions::new().connect_lazy_with(configuration.with_db())
+}
+
 async fn greet(req: HttpRequest) -> impl Responder {
     let name = req.match_info().get("name").unwrap_or("World");
     format!("Hello {}!", name)
@@ -46,4 +54,49 @@ async fn greet(req: HttpRequest) -> impl Responder {
 
 async fn health_check(_req: HttpRequest) -> impl Responder {
     HttpResponse::Ok().finish()
+}
+
+pub struct Application {
+    port: u16,
+    server: Server,
+}
+
+impl Application {
+    pub async fn build(configurations: Settings) -> Result<Self, std::io::Error> {
+        let connection = get_connection_pool(&configurations.database);
+
+        let addr_to_bind = format!(
+            "{}:{}",
+            configurations.application.host, configurations.application.port
+        );
+
+        let listener = TcpListener::bind(addr_to_bind).expect("Failed to bind random port.");
+
+        let sender_email = configurations
+            .email_client
+            .sender()
+            .expect("Invalide sender email.");
+
+        let timeout = configurations.email_client.timeout();
+
+        let email_client = EmailClient::new(
+            configurations.email_client.base_url,
+            sender_email,
+            configurations.email_client.auth_token,
+            timeout,
+        );
+
+        Ok(Self {
+            port: listener.local_addr()?.port(),
+            server: run(listener, connection, email_client)?,
+        })
+    }
+
+    pub fn port(&self) -> u16 {
+        self.port
+    }
+
+    pub async fn run_until_stopped(self) -> Result<(), std::io::Error> {
+        self.server.await
+    }
 }
