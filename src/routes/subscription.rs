@@ -3,15 +3,19 @@ use chrono::Utc;
 use sqlx::PgPool;
 use uuid::Uuid;
 
-use crate::domain::{FormDataSubscriber, NewSubscriber, SubscriberEmail, SubscriberName};
+use crate::{
+    domain::{FormDataSubscriber, NewSubscriber, SubscriberEmail, SubscriberName},
+    email_clients::EmailClient,
+};
 
-#[tracing::instrument(name="Adding a new subscriber", skip(form, connection_pool), fields(subscriber_email=%form.email, subscriber_name=%form.name))]
+#[tracing::instrument(name="Adding a new subscriber", skip(form, connection_pool, email_client), fields(subscriber_email=%form.email, subscriber_name=%form.name))]
 // The web::Form<> and web::Data annotations are telling the framework
 // what to extract from the http request.
 // After extraction, form and connection_pool will be of the type annotated inside the <>
 pub async fn subsribe(
     form: web::Form<FormDataSubscriber>,
     connection_pool: web::Data<PgPool>,
+    email_client: web::Data<EmailClient>,
 ) -> HttpResponse {
     let form: FormDataSubscriber = form.into_inner();
 
@@ -19,10 +23,21 @@ pub async fn subsribe(
         Ok(subscriber) => subscriber,
         Err(_) => return HttpResponse::BadRequest().finish(),
     };
-    match insert_subscriber(&new_subscriber, &connection_pool).await {
-        Ok(_) => HttpResponse::Ok().finish(),
-        Err(_) => HttpResponse::InternalServerError().finish(),
+    if insert_subscriber(&new_subscriber, &connection_pool)
+        .await
+        .is_err()
+    {
+        return HttpResponse::InternalServerError().finish();
     }
+
+    if send_confirmatioin_email(&email_client, new_subscriber)
+        .await
+        .is_err()
+    {
+        return HttpResponse::InternalServerError().finish();
+    }
+
+    HttpResponse::Ok().finish()
 }
 
 #[tracing::instrument(
@@ -57,4 +72,29 @@ pub fn parse_subscriber(form: FormDataSubscriber) -> Result<NewSubscriber, Strin
     let name = SubscriberName::parse(form.name)?;
     let email = SubscriberEmail::parse(form.email)?;
     Ok(NewSubscriber { name, email })
+}
+
+#[tracing::instrument(name = "Sending confirmation email.", skip_all)]
+pub async fn send_confirmatioin_email(
+    email_client: &EmailClient,
+    new_subscriber: NewSubscriber,
+) -> Result<(), reqwest::Error> {
+    let confirmation_link = "https://there-is-no-such-domain.com/subscriptions/confirm";
+
+    email_client
+        .send_email(
+            new_subscriber.email,
+            "Welcome",
+            &format!(
+                "Welcome to our newsletter!<br/>\
+                Click <a href=\"{}\">here</a> to confirm your subscription.",
+                confirmation_link
+            ),
+            &format!(
+                "Welcome to our newsletter!<br/>\
+                Visit {} to confirm your subscription.",
+                confirmation_link
+            ),
+        )
+        .await
 }
