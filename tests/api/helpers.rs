@@ -1,17 +1,29 @@
 use once_cell::sync::Lazy;
+use reqwest::Response;
 use sqlx::{ConnectOptions, Executor, PgPool};
-use std::net::TcpListener;
 use uuid::Uuid;
 use zero2prod::configuration::get_configuration;
 use zero2prod::configuration::DatabaseSettings;
-use zero2prod::email_clients::EmailClient;
-use zero2prod::startup::run;
+use zero2prod::startup::Application;
 use zero2prod::telemetry::get_subscriber;
 use zero2prod::telemetry::init_subscriber;
 
 pub struct TestApp {
     pub address: String,
     pub connection_pool: PgPool,
+}
+
+impl TestApp {
+    pub async fn post_subscription(&self, body: String) -> Response {
+        let client = reqwest::Client::new();
+        client
+            .post(format!("{}/subscriptions", self.address))
+            .header("Content-Type", "application/x-www-form-urlencoded")
+            .body(body)
+            .send()
+            .await
+            .expect("Failed to send subscription request.")
+    }
 }
 
 static TRACING: Lazy<()> = Lazy::new(|| {
@@ -31,34 +43,23 @@ static TRACING: Lazy<()> = Lazy::new(|| {
 
 pub async fn spawn_app() -> TestApp {
     Lazy::force(&TRACING);
-    let listener = TcpListener::bind("127.0.0.1:0").expect("Failed to bind random port.");
-    let addr = listener.local_addr().unwrap();
 
     let mut configurations = get_configuration().expect("Failed to read configuration");
 
     configurations.database.database_name = Uuid::new_v4().to_string();
+    configurations.application.host = String::from("127.0.0.1");
+    configurations.application.port = 0;
 
     let connection_pool = configure_database(&configurations.database).await;
 
-    let sender_email = configurations
-        .email_client
-        .sender()
-        .expect("Invalide sender email.");
+    let application = Application::build(configurations)
+        .await
+        .expect("Failed to build server application");
+    let addr = format!("127.0.0.1:{}", application.port());
 
-    let timeout = configurations.email_client.timeout();
-    let email_client = EmailClient::new(
-        configurations.email_client.base_url,
-        sender_email,
-        configurations.email_client.auth_token,
-        timeout,
-    );
-
-    let server = run(listener, connection_pool.clone(), email_client)
-        .expect("Failed to fireup server for test.");
-
-    tokio::spawn(server);
+    tokio::spawn(application.run_until_stopped());
     TestApp {
-        address: format!("http://{addr}"),
+        address: format!("http://{}", addr),
         connection_pool,
     }
 }
