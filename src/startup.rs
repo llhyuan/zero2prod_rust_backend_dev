@@ -1,7 +1,7 @@
 use crate::{
     configuration::{DatabaseSettings, Settings},
     email_clients::EmailClient,
-    routes::subscription::subsribe,
+    routes::{subcription_confirm::subscription_confirm, subscription::subsribe},
 };
 use std::net::TcpListener;
 
@@ -13,9 +13,11 @@ pub fn run(
     listener: TcpListener,
     db_pool: PgPool,
     email_client: EmailClient,
+    base_url: String,
 ) -> Result<Server, std::io::Error> {
     let connection_pool = web::Data::new(db_pool);
     let email_client = web::Data::new(email_client);
+    let base_url = web::Data::new(ApplicationBaseUrl(base_url));
 
     // actix_web will create one server for each CPU core.
     // Wrapping shared data in web::Data, which is an arc<T> pointer,
@@ -33,9 +35,14 @@ pub fn run(
             .route("/", web::get().to(greet))
             .route("/health_check", web::get().to(health_check))
             .route("/subscriptions", web::post().to(subsribe))
+            .route(
+                "/subscriptions/confirm",
+                web::get().to(subscription_confirm),
+            )
             .route("/{name}", web::get().to(greet))
             .app_data(connection_pool.clone())
             .app_data(email_client.clone())
+            .app_data(base_url.clone())
     })
     .listen(listener)?
     .run();
@@ -60,6 +67,8 @@ pub struct Application {
     port: u16,
     server: Server,
 }
+
+pub struct ApplicationBaseUrl(pub String);
 
 impl Application {
     pub async fn build(configurations: Settings) -> Result<Self, std::io::Error> {
@@ -88,7 +97,12 @@ impl Application {
 
         Ok(Self {
             port: listener.local_addr()?.port(),
-            server: run(listener, connection, email_client)?,
+            server: run(
+                listener,
+                connection,
+                email_client,
+                configurations.application.base_url,
+            )?,
         })
     }
 
