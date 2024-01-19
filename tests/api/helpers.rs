@@ -94,6 +94,10 @@ pub async fn spawn_app() -> TestApp {
     let addr = format!("127.0.0.1:{}", &application_port);
 
     tokio::spawn(application.run_until_stopped());
+
+    // After spawning up a new instance,
+    // only its address and port number are needed
+    // to access/send requests to it.
     TestApp {
         address: format!("http://{}", addr),
         port: application_port,
