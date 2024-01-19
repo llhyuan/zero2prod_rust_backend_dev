@@ -1,8 +1,10 @@
+use linkify::LinkFinder;
 use once_cell::sync::Lazy;
 use reqwest::Response;
+use reqwest::Url;
 use sqlx::{ConnectOptions, Executor, PgPool};
 use uuid::Uuid;
-use wiremock::MockServer;
+use wiremock::{MockServer, Request};
 use zero2prod::configuration::get_configuration;
 use zero2prod::configuration::DatabaseSettings;
 use zero2prod::startup::Application;
@@ -11,8 +13,14 @@ use zero2prod::telemetry::init_subscriber;
 
 pub struct TestApp {
     pub address: String,
+    pub port: u16,
     pub connection_pool: PgPool,
     pub email_server: MockServer,
+}
+
+pub struct ConfirmationLinks {
+    pub html: reqwest::Url,
+    pub plain_text: reqwest::Url,
 }
 
 impl TestApp {
@@ -25,6 +33,28 @@ impl TestApp {
             .send()
             .await
             .expect("Failed to send subscription request.")
+    }
+
+    pub fn get_confirmation_link(&self, email_request: &Request) -> ConfirmationLinks {
+        let request_body: serde_json::Value = serde_json::from_slice(&email_request.body).unwrap();
+
+        fn get_link(s: &str) -> String {
+            let links: Vec<_> = LinkFinder::new()
+                .links(s)
+                .filter(|link| *link.kind() == linkify::LinkKind::Url)
+                .collect();
+            links[0].as_str().to_string()
+        }
+
+        let confirmation_link = get_link(request_body["HtmlBody"].as_str().unwrap());
+        let mut parsed_link = Url::parse(&confirmation_link).unwrap();
+
+        parsed_link.set_port(Some(self.port)).unwrap();
+
+        ConfirmationLinks {
+            html: parsed_link.clone(),
+            plain_text: parsed_link,
+        }
     }
 }
 
@@ -60,11 +90,13 @@ pub async fn spawn_app() -> TestApp {
     let application = Application::build(configurations)
         .await
         .expect("Failed to build server application");
-    let addr = format!("127.0.0.1:{}", application.port());
+    let application_port = application.port();
+    let addr = format!("127.0.0.1:{}", &application_port);
 
     tokio::spawn(application.run_until_stopped());
     TestApp {
         address: format!("http://{}", addr),
+        port: application_port,
         connection_pool,
         email_server,
     }
