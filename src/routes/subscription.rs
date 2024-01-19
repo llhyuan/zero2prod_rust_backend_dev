@@ -6,9 +6,10 @@ use uuid::Uuid;
 use crate::{
     domain::{FormDataSubscriber, NewSubscriber, SubscriberEmail, SubscriberName},
     email_clients::EmailClient,
+    startup::ApplicationBaseUrl,
 };
 
-#[tracing::instrument(name="Adding a new subscriber", skip(form, connection_pool, email_client), fields(subscriber_email=%form.email, subscriber_name=%form.name))]
+#[tracing::instrument(name="Adding a new subscriber", skip_all, fields(subscriber_email=%form.email, subscriber_name=%form.name))]
 // The web::Form<> and web::Data annotations are telling the framework
 // what to extract from the http request.
 // After extraction, form and connection_pool will be of the type annotated inside the <>
@@ -16,6 +17,7 @@ pub async fn subsribe(
     form: web::Form<FormDataSubscriber>,
     connection_pool: web::Data<PgPool>,
     email_client: web::Data<EmailClient>,
+    base_url: web::Data<ApplicationBaseUrl>,
 ) -> HttpResponse {
     let form: FormDataSubscriber = form.into_inner();
 
@@ -30,7 +32,7 @@ pub async fn subsribe(
         return HttpResponse::InternalServerError().finish();
     }
 
-    if send_confirmatioin_email(&email_client, new_subscriber)
+    if send_confirmatioin_email(&email_client, new_subscriber, &base_url.0)
         .await
         .is_err()
     {
@@ -56,7 +58,7 @@ async fn insert_subscriber(
         new_subscriber.email.as_ref(),
         new_subscriber.name.as_ref(),
         Utc::now(),
-        "confirmed"
+        "pending_confirmation"
     )
     .execute(connection_pool)
     .await
@@ -78,8 +80,13 @@ pub fn parse_subscriber(form: FormDataSubscriber) -> Result<NewSubscriber, Strin
 pub async fn send_confirmatioin_email(
     email_client: &EmailClient,
     new_subscriber: NewSubscriber,
+    base_url: &str,
 ) -> Result<(), reqwest::Error> {
-    let confirmation_link = "https://there-is-no-such-domain.com/subscriptions/confirm";
+    let random_token = "Random_token";
+    let confirmation_link = format!(
+        "{}/subscriptions/confirm?subscription_token={}",
+        base_url, random_token
+    );
 
     email_client
         .send_email(
