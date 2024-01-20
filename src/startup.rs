@@ -1,7 +1,7 @@
 use crate::{
     configuration::{DatabaseSettings, Settings},
     email_clients::EmailClient,
-    routes::{subcription_confirm::subscription_confirm, subscription::subsribe},
+    routes::{subscription::subsribe, subscription_confirm::subscription_confirm},
 };
 use std::net::TcpListener;
 
