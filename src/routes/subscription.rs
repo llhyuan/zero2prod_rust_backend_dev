@@ -1,5 +1,4 @@
 use actix_web::{web, HttpResponse};
-use chrono::Utc;
 use rand::{distributions::Alphanumeric, thread_rng, Rng};
 use sqlx::{Executor, PgPool, Postgres, Transaction};
 use uuid::Uuid;
@@ -36,7 +35,7 @@ pub async fn subsribe(
         }
     };
 
-    let subscription_token = generate_subscription_toke();
+    let subscription_token = generate_subscription_token();
     let subscriber_id = match insert_subscriber(&new_subscriber, &mut transaction).await {
         Ok(subcriber_id) => subcriber_id,
         Err(_) => return HttpResponse::InternalServerError().finish(),
@@ -134,7 +133,7 @@ pub async fn send_confirmatioin_email(
         .await
 }
 
-fn generate_subscription_toke() -> String {
+fn generate_subscription_token() -> String {
     let mut rng = thread_rng();
     std::iter::repeat_with(|| rng.sample(Alphanumeric))
         .map(char::from)
