@@ -2,10 +2,16 @@ use crate::{
     configuration::{DatabaseSettings, Settings},
     email_clients::EmailClient,
     routes::{subscription::subsribe, subscription_confirm::subscription_confirm},
+    templating::{HealthCheckTemplate, HelloTemplate},
 };
+use askama::Template;
 use std::net::TcpListener;
 
-use actix_web::{dev::Server, web, App, HttpRequest, HttpResponse, HttpServer, Responder};
+use actix_files as fs;
+use actix_web::{
+    dev::Server, http::header::ContentType, web, App, HttpRequest, HttpResponse, HttpServer,
+    Responder,
+};
 use sqlx::{postgres::PgPoolOptions, PgPool};
 use tracing_actix_web::TracingLogger;
 
@@ -32,7 +38,7 @@ pub fn run(
             // The default tracing logger will automaticaly
             // create an id for each request on request start.
             .wrap(TracingLogger::default())
-            .route("/", web::get().to(greet))
+            .route("/hello", web::get().to(greet))
             .route("/health_check", web::get().to(health_check))
             .route("/subscriptions", web::post().to(subsribe))
             .route(
@@ -40,6 +46,7 @@ pub fn run(
                 web::get().to(subscription_confirm),
             )
             .route("/{name}", web::get().to(greet))
+            .service(fs::Files::new("/", "./static/root/").index_file("index.html"))
             .app_data(connection_pool.clone())
             .app_data(email_client.clone())
             .app_data(base_url.clone())
@@ -50,17 +57,28 @@ pub fn run(
     Ok(server)
 }
 
-pub fn get_connection_pool(configuration: &DatabaseSettings) -> PgPool {
-    PgPoolOptions::new().connect_lazy_with(configuration.with_db())
+pub fn get_connection_pool(confi: &DatabaseSettings) -> PgPool {
+    PgPoolOptions::new().connect_lazy_with(confi.with_db())
 }
 
-async fn greet(req: HttpRequest) -> impl Responder {
-    let name = req.match_info().get("name").unwrap_or("World");
-    format!("Hello {}!", name)
+async fn greet(_req: HttpRequest) -> impl Responder {
+    let hello = HelloTemplate { name: "Ivan" }.render().unwrap();
+    //let path: PathBuf = "./static/hello.html".parse().unwrap();
+    // fs::NamedFile::open_async(path).await.unwrap()
+    HttpResponse::Ok()
+        .content_type(ContentType::html())
+        .body(hello)
 }
 
 async fn health_check(_req: HttpRequest) -> impl Responder {
-    HttpResponse::Ok().finish()
+    let health = HealthCheckTemplate {
+        text: "hangyuan with htmx",
+    }
+    .render()
+    .unwrap();
+    HttpResponse::Ok()
+        .content_type(ContentType::html())
+        .body(health)
 }
 
 pub struct Application {

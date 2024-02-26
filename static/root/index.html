@@ -1,0 +1,21 @@
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title></title>
+    <link href="./css/style.css" rel="stylesheet" />
+  </head>
+  <body>
+    <div hx-get="/hello" hx-indicator="#indicator">
+      <h1>Say hello</h1>
+      <p id="indicator" class="htmx-indicator">Loading</p>
+    </div>
+    <h1 hx-get="/health_check" class="main text-red-400">Health Check</h1>
+    <p>This message will stay after click</p>
+  </body>
+  <script
+    src="https://unpkg.com/htmx.org@1.9.10"
+    integrity="sha384-D1Kt99CQMDuVetoL1lrYwg5t+9QdHe7NLX/SoJYkXDFfX37iInKRy5xLSi8nO7UC"
+    crossorigin="anonymous"
+  ></script>
+</html>

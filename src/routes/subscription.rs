@@ -1,4 +1,5 @@
-use actix_web::{web, HttpResponse};
+use actix_web::{web, HttpResponse, ResponseError};
+use chrono::Utc;
 use rand::{distributions::Alphanumeric, thread_rng, Rng};
 use sqlx::{Executor, PgPool, Postgres, Transaction};
 use uuid::Uuid;
@@ -146,7 +147,7 @@ pub async fn store_token(
     transaction: &mut Transaction<'_, Postgres>,
     subscription_token: &str,
     subscriber_id: Uuid,
-) -> Result<(), sqlx::Error> {
+) -> Result<(), StoreTokenError> {
     let query = sqlx::query!(
         r#"INSERT INTO subscription_tokens (subscriber_id, subscription_token)
     VALUES ($1, $2)"#,
@@ -156,7 +157,45 @@ pub async fn store_token(
 
     transaction.execute(query).await.map_err(|err| {
         tracing::error!("Failed to execute query: {:?}", err);
-        err
+        StoreTokenError(err)
     })?;
+    Ok(())
+}
+
+pub struct StoreTokenError(sqlx::Error);
+
+impl ResponseError for StoreTokenError {}
+
+impl std::fmt::Display for StoreTokenError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "A database error was encountered while trying to store a subscription token."
+        )
+    }
+}
+
+impl std::fmt::Debug for StoreTokenError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        error_chain_fmt(self, f)
+    }
+}
+
+impl std::error::Error for StoreTokenError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        Some(&self.0)
+    }
+}
+
+fn error_chain_fmt(
+    e: &impl std::error::Error,
+    f: &mut std::fmt::Formatter<'_>,
+) -> std::fmt::Result {
+    writeln!(f, "{}\n", e)?;
+    let mut current_err = e.source();
+    while let Some(cause) = current_err {
+        writeln!(f, "Caused by:\n\t{}", cause)?;
+        current_err = cause.source();
+    }
     Ok(())
 }
