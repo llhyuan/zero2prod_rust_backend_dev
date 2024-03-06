@@ -1,4 +1,6 @@
-use actix_web::{web, HttpResponse};
+use actix_web::{web, HttpResponse, ResponseError};
+use anyhow::Context;
+use reqwest::StatusCode;
 use sqlx::PgPool;
 use uuid::Uuid;
 
@@ -11,24 +13,35 @@ pub struct Parameters {
 pub async fn subscription_confirm(
     parameters: web::Query<Parameters>,
     connection_pool: web::Data<PgPool>,
-) -> HttpResponse {
-    let id = match get_subscriber_id(&connection_pool, &parameters.subscription_token).await {
-        Ok(id) => id,
-        Err(_) => return HttpResponse::InternalServerError().finish(),
-    };
+) -> Result<HttpResponse, ConfirmationError> {
+    let id = get_subscriber_id(&connection_pool, &parameters.subscription_token)
+        .await
+        .context("No database connection.")?;
 
     match id {
-        None => HttpResponse::Unauthorized().finish(),
+        None => Err(ConfirmationError::NoRecordError(
+            "Record does not exit in the database.".to_string(),
+        )),
         Some(subscriber_id) => {
-            if update_status(&connection_pool, subscriber_id)
+            update_status(&connection_pool, subscriber_id)
                 .await
-                .is_err()
-            {
-                HttpResponse::InternalServerError().finish()
-            } else {
-                HttpResponse::Ok().finish()
-            }
+                .context("Failed to update confirmation status in the database.")?;
+            Ok(HttpResponse::Ok().finish())
         }
+    }
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum ConfirmationError {
+    #[error("Failed to confirm subscription. You need to subscrib to our newsletter first.")]
+    NoRecordError(String),
+    #[error("Weak Internet connection. Try again later.")]
+    DatabaseError(#[from] anyhow::Error),
+}
+
+impl ResponseError for ConfirmationError {
+    fn status_code(&self) -> reqwest::StatusCode {
+        StatusCode::INTERNAL_SERVER_ERROR
     }
 }
 

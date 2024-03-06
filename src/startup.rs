@@ -71,14 +71,7 @@ async fn greet(_req: HttpRequest) -> impl Responder {
 }
 
 async fn health_check(_req: HttpRequest) -> impl Responder {
-    let health = HealthCheckTemplate {
-        text: "hangyuan with htmx",
-    }
-    .render()
-    .unwrap();
-    HttpResponse::Ok()
-        .content_type(ContentType::html())
-        .body(health)
+    HttpResponse::Ok().finish()
 }
 
 pub struct Application {
